@@ -42,10 +42,13 @@ if( 404 == response.statusCode ) {
     log.info "[INFO] Docker Image not found. Downloading from Docker Registry"
     log.info with().parameter("fromImage", "pantinor/centos-mongodb").post("/images/create").asString()
     log.info "Image downloaded"
+
+    // retry to create the container
+    response = with().body(dockerImage).post("/containers/create")
 }
 
-// retry to create the container
-def containerId = with().body(dockerImage).post("/containers/create").path("Id")
+def containerId = response.path("Id")
+
 
 log.info "Container created with id $containerId"
 
