@@ -1,0 +1,103 @@
+<?xml version="1.0"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>gmaven-docker</artifactId>
+    <groupId>paolo.test</groupId>
+    <version>1.0.0-SNAPSHOT</version>
+    <name>Sample Maven Docker integration</name>
+    <description>See companion blogpost here: </description>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.gmaven</groupId>
+                <artifactId>gmaven-plugin</artifactId>
+                <version>1.4</version>
+                <configuration>
+                    <providerSelection>2.0</providerSelection>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>start-docker-images</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>execute</goal>
+                        </goals>
+                        <configuration>
+                            <source><![CDATA[
+import com.jayway.restassured.RestAssured
+import static   com.jayway.restassured.RestAssured.*
+import static   com.jayway.restassured.matcher.RestAssuredMatchers.*
+
+RestAssured.baseURI = "http://127.0.0.1"
+RestAssured.port = 4243
+
+// here you can specify advance docker params, but the mandatory one is the name of the Image you want to use
+def dockerImage = '{"Image":"pantinor/centos-mongodb"}'
+
+
+log.info "Creating new Docker container from image $dockerImage"
+def response =  with().body(dockerImage).post("/containers/create")
+
+if( 404 == response.statusCode ) {
+    log.info "[INFO] Docker Image not found. Downloading from Docker Registry"
+    log.info with().parameter("fromImage", "pantinor/centos-mongodb").post("/images/create").asString()
+    log.info "Image downloaded"
+}
+
+// retry to create the container
+def containerId = with().body(dockerImage).post("/containers/create").path("Id")
+
+log.info "Container created with id $containerId"
+
+// set the containerId to be retrieved later during the stop phase
+project.properties.setProperty("containerId", "$containerId")
+
+log.info "Starting container $containerId"
+with().post("/containers/$containerId/start").asString()
+
+def ip = with().get("/containers/$containerId/json").path("NetworkSettings.IPAddress")
+
+log.info "Container started with ip: $ip" 
+
+System.setProperty("MONGODB_HOSTNAME", "$ip")
+System.setProperty("MONGODB_PORT", "27017")
+]]></source>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>stop-docker-images</id>
+                        <phase>post-integration-test</phase>
+                        <goals>
+                            <goal>execute</goal>
+                        </goals>
+                        <configuration>
+                            <source><![CDATA[
+import com.jayway.restassured.RestAssured
+import static   com.jayway.restassured.RestAssured.*
+import static   com.jayway.restassured.matcher.RestAssuredMatchers.*
+
+RestAssured.baseURI = "http://127.0.0.1"
+RestAssured.port = 4243
+
+def containerId = project.properties.getProperty('containerId')
+log.info "Stopping Docker container $containerId"
+with().post("/containers/$containerId/stop")
+log.info "Docker container stopped"
+with().delete("/containers/$containerId")
+log.info "Docker container deleted"
+]]></source>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+    <dependencies>
+        <dependency>
+            <groupId>com.jayway.restassured</groupId>
+            <artifactId>rest-assured</artifactId>
+            <version>1.8.1</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
