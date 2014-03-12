@@ -6,6 +6,10 @@
     <version>1.0.0-SNAPSHOT</version>
     <name>Sample Maven Docker integration</name>
     <description>See companion blogpost here: </description>
+    <properties>
+        <docker.image>pantinor/centos-mongodb</docker.image>
+        <docker.remove.container>true</docker.remove.container>
+    </properties>
     <build>
         <plugins>
             <plugin>
@@ -34,7 +38,7 @@ RestAssured.baseURI = "http://127.0.0.1"
 RestAssured.port = 4243
 
 // here you can specify advance docker params, but the mandatory one is the name of the Image you want to use
-def dockerImageConf = '{"Image":"vieux/elasticsearchxxxxxxx"}'
+def dockerImageConf = '{"Image":"${docker.image}"}'
 def dockerImageName = JsonPath.from(dockerImageConf).get("Image")
 
 log.info "Creating new Docker container from image $dockerImageName"
@@ -91,8 +95,10 @@ def containerId = project.properties.getProperty('containerId')
 log.info "Stopping Docker container $containerId"
 with().post("/containers/$containerId/stop")
 log.info "Docker container stopped"
-with().delete("/containers/$containerId")
-log.info "Docker container deleted"
+if( true == ${docker.remove.container} ){
+    with().delete("/containers/$containerId")
+    log.info "Docker container deleted"
+}
 ]]></source>
                         </configuration>
                     </execution>
