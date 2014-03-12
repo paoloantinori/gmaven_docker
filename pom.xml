@@ -27,28 +27,33 @@
 import com.jayway.restassured.RestAssured
 import static   com.jayway.restassured.RestAssured.*
 import static   com.jayway.restassured.matcher.RestAssuredMatchers.*
+import com.jayway.restassured.path.json.JsonPath
+import com.jayway.restassured.response.Response
 
 RestAssured.baseURI = "http://127.0.0.1"
 RestAssured.port = 4243
 
 // here you can specify advance docker params, but the mandatory one is the name of the Image you want to use
-def dockerImage = '{"Image":"pantinor/centos-mongodb"}'
+def dockerImageConf = '{"Image":"vieux/elasticsearchxxxxxxx"}'
+def dockerImageName = JsonPath.from(dockerImageConf).get("Image")
 
-
-log.info "Creating new Docker container from image $dockerImage"
-def response =  with().body(dockerImage).post("/containers/create")
+log.info "Creating new Docker container from image $dockerImageName"
+def response =  with().body(dockerImageConf).post("/containers/create")
 
 if( 404 == response.statusCode ) {
-    log.info "[INFO] Docker Image not found. Downloading from Docker Registry"
-    log.info with().parameter("fromImage", "pantinor/centos-mongodb").post("/images/create").asString()
+    log.info "Docker image not found in local repo. Trying to dowload image '$dockerImageName' from remote repos"
+    response = with().parameter("fromImage", dockerImageName).post("/images/create")
+    def message = response.asString()
+    //odd: rest api always returns 200 and doesn't return proper json. I have to grep
+    if( message.contains("404") ) fail("Image $dockerImageName NOT FOUND remotely. Abort. $message}")
     log.info "Image downloaded"
-
+    
     // retry to create the container
-    response = with().body(dockerImage).post("/containers/create")
+    response = with().body(dockerImageConf).post("/containers/create")
+    if( 404 == response.statusCode ) fail("Unable to create container with conf $dockerImageConf: ${response.asString()}")
 }
 
-def containerId = response.path("Id")
-
+def containerId = response.jsonPath().get("Id")
 
 log.info "Container created with id $containerId"
 
