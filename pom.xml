@@ -49,7 +49,7 @@ if( 404 == response.statusCode ) {
     response = with().parameter("fromImage", dockerImageName).post("/images/create")
     def message = response.asString()
     //odd: rest api always returns 200 and doesn't return proper json. I have to grep
-    if( message.contains("404") ) fail("Image $dockerImageName NOT FOUND remotely. Abort. $message}")
+    if( message.contains("HTTP code: 404") ) fail("Image $dockerImageName NOT FOUND remotely. Abort. $message}")
     log.info "Image downloaded"
     
     // retry to create the container
